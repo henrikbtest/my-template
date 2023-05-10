@@ -1,0 +1,1055 @@
+# Resource type that specifies the schema type of the document.
+kind: TemplateDefinition
+# Version of the Template Definition schema specification (i.e. of this model).
+schemaVersion: 2.1.0
+
+# Data that is required to identify the Template.
+general:
+  # Name of the template - must be unique for your tenant.
+  name: 'my-template'
+  # Version of the Template, in semantic version format (e.g. 0.1.0).
+  version: '0.0.1'
+
+# This section specifies the parameters that will be collected during the Template Run.
+##
+# Note:
+# You can add and remove parameters according to your Template's needs.
+##
+parameters:
+  # the name of the parameter
+  - name: display-name
+    # The type of the parameter:
+    #   a) string: character-based input.
+    #   b) boolean: true or false.
+    #   c) number: numerical input.
+    type: string
+    # Key-value pairs of constraints that limit the accepted values of the parameter.
+    # If multiple constraints are provided, each constraint must be fulfilled in order for the value to be accepted.
+    constraints:
+      # Descriptive name of the constraint (can be referenced in the ui:steps section).
+      - name: length
+        # Regular expression that this constraint checks for.
+        # This regular expression can be adapted to your needs.
+        regex: "^.{1,100}$"
+    # Marks if this parameter must be provided or can be omitted by the user.
+    required: true
+    # The value of each parameter will be stored in an attribute named "value".
+    # It can therefore be easily accessed with JSONata via "{{ $$.parameters[name = '<parameter-name>'].value }}"
+    # within the Template Definition.
+
+    # Suggestions for available GitHub organizations are provided via the
+    # "data" call "git-organizations" in the data section of this file.
+    # The link of the data call to this parameter is done via the parameterRef's
+    # dataRef attribute within an item in the ui section.
+  - name: git-organization
+    type: string
+    required: true
+
+  - name: github-endpoint
+    type: string
+    # The "data" context allows to transparently (i.e. without user interaction) via a data query reference.
+    # The "valueRef" is the id of the data query.
+    # If the data element can't return a value or the value does not match the data type of the parameter,
+    # the parameter value will be empty / uninitialized.
+    context:
+      origin: data
+      valueRef: github-endpoint
+    required: true
+
+  - name: repository-name
+    type: string
+    constraints:
+      - name: repository-name
+        # This regular expression can be adapted to your needs.
+        regex: ^([a-zA-Z0-9-_]){1,100}$
+    required: true
+
+    # This parameter is not actually used in the Template's automation,
+    # but is added to demonstrate the use of static data bindings:
+    # The static data "repository-private-choices" provides labels for the available
+    # "true" and "false" values. This metadata is then linked to this parameter
+    # via the parameterRef's dataRef attribute within an item in the ui section.
+  - name: repository-private
+    type: boolean
+    default: false
+
+    # Parameters can also store arrays of data.
+    # This allows a user to select multiple values for a single ui element.
+    # In this case, the features array is linked to the static data "feature-list"
+    # via an ui element.
+    # This parameter is mainly added for demonstration purposes and not used in the
+    # automation section of the Template.
+  - name: features
+    type: string
+    array: true
+
+  ## Template Run parameters
+  - name: template-run-id
+    type: string
+    context:
+      # The context "template-run" allows to reference values that are generated during the runtime of a Template Run execution.
+      # Those context values will always be empty in the ui section.
+      # If they should not potentially be overwritten by Template Users, parameters with this context should therefore only be
+      # referenced in the automation section.
+      origin: template-run
+      # Available values are the unique "id" of the Template Run, the Template Run access "token", and the used "template-id".
+      valueRef: id
+    required: true
+
+  - name: template-run-token
+    type: string
+    context:
+      origin: template-run
+      valueRef: token
+    required: true
+
+  - name: template-id
+    type: string
+    context:
+      origin: template-run
+      valueRef: template-id
+    required: true
+
+  ## DXP-specific parameters
+  # ID of the DXP user that is currently logged on.
+  - name: dxp-user-id
+    type: string
+    context:
+      origin: luigi
+      valueRef: userid
+    required: true
+  # Session token of a DXP user, which is used to authenticate the user in DXP.
+  - name: dxp-token
+    type: string
+    # Allows to reference values from the clients' context.
+    context:
+      # Retrieves values from a SAP Luigi context, if the used client offers it.
+      origin: luigi
+      valueRef: token
+    required: true
+  # ID of the DXP tenant that the client is currently logged into.
+  - name: dxp-tenant-id
+    type: string
+    context:
+      origin: luigi
+      valueRef: tenantid
+    required: true
+  # ID of the DXP project (if any) from which the client started the Template wizard.
+  - name: dxp-project-id
+    type: string
+    context:
+      origin: luigi
+      valueRef: projectId
+    required: true
+  # DXP environment: dev | int | live
+  - name: dxp-env
+    type: string
+    context:
+      origin: luigi
+      valueRef: serviceProviderConfig.environment
+    required: true
+
+  ## URLs of Services that can be picked-up from the DXP Client context
+  # DXP Token Provider URL
+  - name: token-provider-api-url
+    type: string
+    context:
+      origin: luigi
+      # Returns for DXP Live environment: https://automaticd.live.dxp.k8s.ondemand.com/query
+      valueRef: serviceProviderConfig.tokenProviderApiUrl
+    required: true
+  # Automaticd URL.
+  - name: automaticd-api-url
+    type: string
+    context:
+      origin: luigi
+      # Returns for DXP Live environment: https://api.automaticd.live.hyperspace.tools.sap
+      valueRef: serviceProviderConfig.automaticdApiUrl
+    required: true
+  # Template Bridge.
+  - name: template-bridge-api-url
+    type: string
+    context:
+      origin: luigi
+      valueRef: serviceProviderConfig.templatebridge
+    required: true
+
+# The data section specifies an array of data queries whose results can be
+# referenced as potential parameter values on Client-side.
+data:
+  # Sample working data query that allows to retrieve available GitHub organizations
+  # within the client's DXP Project context.
+  - id: git-organizations
+    type: call
+    headers:
+      # Authorize as the Template User
+      - name: authorization
+        value: "Bearer {{ $$.parameters[name = 'dxp-token'].value }}"
+      - name: Content-Type
+        value: application/json
+    endpoint:
+      url: "https://github.{{ $$.parameters[name = 'dxp-env'].value }}.dxp.k8s.ondemand.com/query"
+      type: rest
+      method: post
+    payload:
+      query: >-
+        query($tenantId: String!, $projectId: String!) {
+          getGithubRegistrations(tenantID: $tenantId, projectID: $projectId) {
+            name,
+            created,
+            installationRef {
+              id,
+              target_type,
+              account {
+                githubDomain
+                login
+                type
+                url
+              }
+            }
+          }
+        },
+      variables:
+        tenantId: "{{ $$.parameters[name = 'dxp-tenant-id'].value }}"
+        projectId: "{{ $$.parameters[name = 'dxp-project-id'].value }}"
+    response:
+      # Transforms the received response to derive the names of the GitHub organizations.
+      transformation:
+        # The data type that is stored in the value object.
+        type: string
+        # The result of a data call is expected to be an array of objects.
+        # Each element of this array must have an attribute named "value" that stores the value that
+        # can later be assigned to a parameter, when this data element is referenced in the context
+        # of a parameter or in the parameterRef.dataRef in the ui section.
+        # Additionally, a "label" attribute can be added to the array element to provide a human friendly
+        # value - e.g. if the actual "value" is too technical.
+        # Furthermore, an "icon" and "iconAltText" attribute can be provided, which can be interpret by
+        # GUI clients of the Template Service.
+        #
+        # If no such mapping is specified, an array must be provided and each element of the array is
+        # interpret as the "value" attribute.
+        # If this interpretation does not match the defined type above or if any other error occurs during
+        # the data call, the value of the data response will be empty.
+        expression: >-
+          $map($$.data.getGithubRegistrations.installationRef.account, function($v, $i, $a) {
+            {
+              "value": $v.login,
+              "label": $v.login
+            }
+          })[]
+
+  # Sample working data query that allows to retrieve the matching GitHub endpoint domain
+  # of the value (i.e. git organization) stored in the git-organization parameter.
+  - id: github-endpoint
+    type: call
+    headers:
+      - name: authorization
+        value: "Bearer {{ $$.parameters[name = 'dxp-token'].value }}"
+      - name: Content-Type
+        value: application/json
+    endpoint:
+      url: "https://github.{{ $$.parameters[name = 'dxp-env'].value }}.dxp.k8s.ondemand.com/query"
+      type: rest
+      method: post
+    payload:
+      query: >-
+        query($tenantId: String!, $projectId: String!) {
+          getGithubRegistrations(tenantID: $tenantId, projectID: $projectId) {
+            name,
+            created,
+            installationRef {
+              id,
+              target_type,
+              account {
+                githubDomain
+                login
+                type
+                url
+              }
+            }
+          }
+        },
+      variables:
+        tenantId: "{{ $$.parameters[name = 'dxp-tenant-id'].value }}"
+        projectId: "{{ $$.parameters[name = 'dxp-project-id'].value }}"
+    response:
+      # Transforms the received response to derive the URL of the GitHub endpoint domain.
+      transformation:
+        type: string
+        # Here, a simple array is returned as a result set.
+        # Hence, each array element of the result set will be interpret as the "value" attribute.
+        # Additionally, the call depends on the resolution of the "git-organization" parameter. As a result,
+        # the parameter value will first be dereferenced before the expression is applied.
+        expression: >-
+          $$.data.getGithubRegistrations.installationRef.account[login='{{ $$.parameters[name = 'git-organization'].value }}'].githubDomain
+
+  # Sample query that combines the github endpoint with the git organization.
+  # This is mainly to sketch the capability of the data section that allows to combine
+  # result sets of multiple data calls.
+  # Even more complex expressions than displayed below, like joins on a common identifier,
+  # are possible when using JSONata: https://docs.jsonata.org/path-operators#-context-variable-binding
+  - id: github-url
+    type: transformation
+    dataRefs:
+      - git-organizations
+      - github-endpoint
+    transformation: >-
+      $map($$.`git-organizations`.value, function($v) {
+          $$.`github-endpoint`[0] & '/' & $v
+      })[]
+
+  # Example for a simple static data element, that provides potential choices for a
+  # boolean value with descriptive labels.
+  - id: repository-private-choices
+    type: static
+    content:
+      - value: false
+        label: Public
+      - value: true
+        label: Private
+
+  # Example for a static data element, that provides potential choices for a
+  # string value with descriptive labels.
+  - id: feature-list
+    type: static
+    content:
+      - value: pipeline
+        label: CI/CD Pipeline Integration
+      - value: hana
+        label: Configuration for SAP HANA Deployment
+      - value: mta
+        label: MTA based SAP Business Technology Platform Deployment
+      - value: cf-manifest
+        label: Cloud Foundry native Deployment
+
+# The ui section specifies how Template-related information is provided to the user.
+ui:
+  # This section specifies how information about the Template is displayed in the Template Catalog.
+  overview:
+    # Name of the template that will be displayed in the template catalog and on the template details page.
+    displayName: |
+      My Template
+    # Short description about the template's purpose that will be displayed on the tile of the template in the template catalog.
+    shortDescription: "asdf"
+    # Long description about the template's purpose that will be displayed on the template details page.
+    longDescription: "asdf"
+    # Icon of the template that will be displayed in the template catalog and on the template details page.
+    # The icon is referenced by name from the ui:icons section and must be specified there.
+    iconRef: my-template-icon
+    # Summarizes the content provided by the template.
+    content:
+      - "asdf"
+      - "asdf"
+    # Technologies that are covered by the template (e.g. Golang, Spring Boot, Cloud Foundry etc.).
+    # Each technology must be specified as an item of this array.
+    technology:
+      - "asdf"
+      - "asdf1"
+    # Tools that are configured as part of the template (e.g. GitHub, EurekaCI, Checkmarx, etc.).
+    # Each tool must be specified as an item of this array.
+    toolchain:
+      - "asdf"
+      - "asdf1"
+    # Team that maintains the Template.
+    owner:
+      # Name of the team.
+      name: "asdf"
+      # Link or email that allows to report issues with the template to the team.
+      url: "https://asdf.sap.com"
+      # Icon/Logo of the team (if any).
+      # The icon is referenced by name from the ui:icons section and must be specified there.
+      iconRef: my-team-icon
+    # List of useful links that are related to this Template
+    # (e.g. link to further documentation of the Template, link to a contribution guide, link to a dependency file etc.).
+    links:
+      # Link text that is displayed
+      - title: "asdf"
+        # Url to open once the link title is clicked
+        url: "https://asdf.sap.com"
+
+  # This section specifies how the parameters will be collected from the user during the Template Run.
+  # What is defined here, will be rendered as UI elements and UI inputs will reference defined parameters.
+  # This creates a connection between the "parameters" section and the "ui" section of this Template Definition.
+  # The overall Template Run UI of your Template will be rendered in the form of a wizard, such that this
+  # section defines the respective wizard steps.
+  #
+  ## Note:
+  # You can add and remove steps, sections, and items according to your Template's needs.
+  ##
+  steps:
+    # Each step is an element in the steps array.
+    # The step order will be kept as it is defined here.
+    # Step title as it will be displayed on top of the wizard page.
+    - title: Component Settings
+      # An icon can be used that represents this step visually in a wizard.
+      # This will be a reference to an icon defined in the icon section.
+      iconRef: sap-action-settings
+      # Each step can consist of multiple sections.
+      # Each element in the sections array represents a grouped section within the step.
+      sections:
+        # Section title that will be displayed as a section header.
+        - title: Component Settings
+          # Can be used to further describe (the purpose of) the section.
+          description: "Specify the parameters related to your created DXP Component."
+          # Each section can consist of multiple items in the items array.
+          # Each item represents a grouped section within the step.
+          items:
+            # Each item links to one or many parameters that should be collected from the user
+            # Name of the item. This will be rendered as a heading of the item section.
+            - label: Display Name
+              # Can be used to further describe the item.
+              description: "Specify the display name of the DXP Component."
+              # Additional help text that can be used to explain (the intention of) the item.
+              help: "The DXP Component name is required to easily identify your component in DXP."
+              # Reference to the parameter that will be filled by the input provided to this input.
+              parameterRef:
+                # Name of the referenced parameter in the parameter section
+                - id: display-name
+                  # Changes the default rendering of the input field.
+                  # Currently, available options differ per parameter type (more options will follow):
+                  #   - string: input (default), textarea
+                  #   - boolean: switch (default), checkbox, switch-tile
+                  #   - number: input (default)
+                  renderAs: input
+                  # Additional metadata based on the parameter type (here: string).
+                  stringMetadata:
+                    # Allows to provide human readable text for the defined parameter constraints.
+                    violationText:
+                      # Name of the constraint as it was defined in the parameters section.
+                      - constraintsRef: length
+                        # Human readable text to explain the referenced constraint.
+                        # This will be displayed in case the constraint's regex does not match.
+                        # The text can be changed to your needs.
+                        text: Your display name is too long. Please limit the name to 100 characters.
+
+    # Optional wizard step, if the DXP Token can't be fetched from the context.
+    # The used when conditional checks for the existence of a DXP Token in the respective parameter.
+    - when: $$.parameters[name = 'dxp-token'].value = ''
+      title: Credentials
+      sections:
+        - title: DXP Token
+          items:
+            - label: Personal DXP Token
+              description: Enter your personal DXP User Token
+              help: The DXP Token could not be found or derived from your context. Please enter it manually.
+              parameterRef:
+                - id: dxp-token
+
+    # Second wizard step
+    - title: Repository Settings
+      sections:
+        - title: Repository Settings
+          items:
+            - label: GitHub Organization
+              description: No organization available
+              help: If no organization is displayed, please onboard a GitHub account in the DXP Accounts section.
+              parameterRef:
+                - id: git-organization
+                  renderAs: select
+                  # Id of the referenced element in the data section.
+                  # Dependent on the selected "renderAs" option, the available data
+                  # will be used in the UI to provide suggestions or choices to select
+                  # from to the end user.
+                  dataRef: git-organizations
+            - label: Repository Name
+              description: Enter a repository name
+              help: Enter a repository name
+              parameterRef:
+                - id: repository-name
+                  initValue: "{{ $lowercase($replace($$.parameters[name = 'display-name'].value, /[^a-zA-Z0-9-.]/, '')) }}"
+                  stringMetadata:
+                    violationText:
+                      - constraintsRef: repository-name
+                        text: Only lowercase letters, numbers, and hyphens ('-')  are allowed.
+            - label: Private Repository
+              description: Should the repository be private?
+              parameterRef:
+                - id: repository-private
+                  renderAs: radiobutton
+                  dataRef: repository-private-choices
+
+    # Third wizard step
+    - title: Features
+      sections:
+        - title: Feature Set
+          items:
+            - label: Features
+              description: Which features do you want to add?
+              help: Add features to your project.
+              parameterRef:
+                # This references a parameter, which is an array of strings
+                - id: features
+                  dataRef: feature-list
+                  # The UI is supposed to provide different UI controls, which depend not
+                  # only on the data type, but also on the parameter being an array or not.
+                  # For example an "input" will be rendered as a "multi-input" in case of an array.
+                  # Similarly, there are different renderAs options available dependent on the
+                  # data-type-array-combination:
+                  # For example, for non-array string parameter a "radiobutton" can be used,
+                  # while for an array string parameter a "checkbox" can be specified, and not vice-versa.
+                  renderAs: checkbox
+
+  # This section is used to specify the icons and their theme variants that can be used within UI-clients.
+  # Each icon element specifies the variants of this icon. The icons must be described as base64-encoded image
+  # within a data URL. To generate such a string from an image, you can use the command line and copy it from
+  # the created file:
+  #    MacOS:   base64 -i <path/to/your/image.png> > image.base64
+  #    Windows: certutil -encode <path/to/your/image.png> image.base64
+  # If you want to skip the generation step, you can also directly reuse an icon from the SAP Icon Explorer:
+  #    https://sapui5.hana.ondemand.com/sdk/test-resources/sap/m/demokit/iconExplorer/webapp/index.html#/overview/SAP-icons.
+  # Just provide the respective SAP-icon URL, e.g. 'sap-icon://action-settings'.
+  #
+  # For each icon, only the light variant is mandatory and will be the default if no other variant is specified.
+  # The icon itself can then be referenced by its name at the respective UI elements via the iconRef attribute.
+  icons:
+    # The name or id of the icon, which allows it to be referenced at other places in the Template Definition.
+    - name: my-template-icon
+      # Specify the available icon variants.
+      variants:
+        # Icon for light themes. This is the default variant.
+        light: data:image/png;base64,asdf
+        # Icon for dark themes.
+        # dark:
+        # Icon for high contrast black (accessibility) theme.
+        # highContrastBlack:
+        # Icon for high contrast white (accessibility) theme.
+        # highContrastWhite:
+    - name: my-team-icon
+      # Specify the available icon variants.
+      variants:
+        # Icon for light themes. This is the default variant.
+        light: data:image/png;base64,asdf
+        # Icon for dark themes.
+        # dark:
+        # Icon for high contrast black (accessibility) theme.
+        # highContrastBlack:
+        # Icon for high contrast white (accessibility) theme.
+        # highContrastWhite:
+    - name: sap-action-settings
+      variants:
+        light: sap-icon://action-settings
+
+# This section specifies how the collected parameters will be used to perform customizable actions.
+# It describes what will actually be achieved once the Template Run successfully finishes.
+#
+# Each element of the automation section defines a call.
+# The individual calls are executed in parallel, if no specified dependency forbids a parallel execution.
+##
+# Note:
+# The example below uses Automaticd (https://pages.github.tools.sap/automaticd/automaticd/docs/)
+# to create a GitHub repository, commit the project scaffold of this repository to the new repository,
+# and create a new component in DXP.
+#
+# Dependent on your use case, entirely different endpoints can be called or Automaticd can be
+# called with different input.
+##
+automation:
+  # Use the DXP Token Provider to provision a GitHub App Token of the chosen GitHub organization
+  # as a Kubernetes Secret to Automaticd.
+  #
+  # This Service will create a Kubernetes Secret with a given "secretName".
+  # The secret will store the GitHub App token at attribute "github" with a value "access_token: <token">.
+  # This allows to later reference this token in Automaticd with "ref: github" and "mapping: access_token: access_token".
+  # Additionally, it will store a Kubernetes kubeconfig with permissions of the given Project at attribute "dxp" with a value "dxp: <kubeconfig>".
+  # It will further annotate the Secret resource to use the Automaticd "default" Secret Engine.
+  #
+  # Detailed information is available here: https://github.tools.sap/dxp/automaticD
+  - id: call-token-provider
+    endpoint:
+      url: "{{ $$.parameters[name = 'token-provider-api-url'].value }}"
+      type: rest
+      method: post
+    headers:
+      # Authorize as the Template User
+      - name: Authorization
+        value: Bearer {{ $$.parameters[name = 'dxp-token'].value }}
+      - name: Content-Type
+        value: application/json
+    payload:
+      query: >-
+        mutation($tenantId:String!, $projectId: String!, $automaticdInput: AutomaticdInput!) {
+            provideTokenToAutomaticd(
+                tenantId: $tenantId,
+                projectId: $projectId,
+                automaticdInput: $automaticdInput)
+        }
+      variables:
+        # Uses context parameters and parameters that were collected from an end user during the wizard interaction.
+        tenantId: "{{ $$.parameters[name='dxp-tenant-id'].value }}"
+        projectId: "{{ $$.parameters[name='dxp-project-id'].value }}"
+        automaticdInput:
+          githubUrl: "{{ $$.parameters[name = 'github-endpoint'].value }}/{{ $$.parameters[name = 'git-organization'].value }}"
+          # The name of the secret resource in Automaticd that will host the GitHub token.
+          # The use of the template-run-id guarantees the uniqueness of this resource.
+          #
+          # Additionally creates a reusable anchor named AUTOMATICD_CR_NAME_DEFAULT (yaml feature).
+          # This is used to avoid repeating the long JSONata expression multiple times.
+          secretName: &AUTOMATICD_CR_NAME_DEFAULT "{{ $$.general.name }}-{{ $$.parameters[name = 'template-run-id'].value }}"
+
+    ## During runtime, a response object will exist in the Template Service, which will be filled during runtime.
+    ## This object can be used in Response Handlers to interpret the status of the call and handle it accordingly.
+    # response:
+    #   statusCode: "200"
+    #   headers:
+    #     - name: Content-Type
+    #       value: application/json
+    #   body: |-
+    #     {
+    #       "data": {
+    #         "tokenCreated": "false"
+    #       },
+    #       "errors": [
+    #         { "message": "Unable to create token." }
+    #       ]
+    #     }
+    #   timeout: false
+
+    monitor:
+      # If no response is received after 15 seconds, the call is considered as timed-out and will return an "error" status.
+      timeout: 15
+      # If the call failed, the Template Service will try again 3 times until giving up.
+      noOfRetries: 3
+    # The Response Handlers are checked for each received response.
+    # They are checked in the order specified. If a handler's when condition matches, further handlers will not be checked.
+    responseHandlers:
+      # GraphQL will always return 200 as status code, if the call was received, independent of the processing result.
+      # Potential errors are stored in the "errors" array, such that an empty errors array indicates success.
+      # As a result, both conditions must be checked for the call to be interpret as success.
+      - when: >-
+          $$.automation[id = 'call-token-provider'].response.statusCode = 200 and
+          $not($exists($$.automation[id = 'call-token-provider'].response.body.errors[0]))
+        status: success
+      # If no when conditional is specified, this is interpret as an unconditional else.
+      # Therefore, if anything else is returned, the call is interpret as "error".
+      - status: error
+        # return all error messages of the errors array
+        message: "{{ $$.automation[id = 'call-token-provider'].response.body.errors.message }}"
+
+  ## Use the generic "kubernetes" endpoint type to create resources in Automaticd and trigger
+  ## an orchestration.
+  ## This exemplary orchestration will create a GitHub Repository within the selected GitHub Organization,
+  ## it will use Gomplate to create a Project Scaffold, and perform a Git commit to update the
+  ## GitHub Repository with the scaffolded content, and create a DXP Component pointing to this repository.
+  #
+  ## Please note that the "source.url" used by the Gomplate resource below should be changed, such that it points to
+  ## the repository that you copied the Skeleton Template to - instead of the Skeleton Template original repository.
+  ## Otherwise, changes to the content of your "scaffold/" directory will not be reflected in the created project scaffold.
+  #
+  ## Here, the different automation calls don't rely on the Automaticd dependency mechanism, but use the dependency
+  ## mechanism of the Template Service.
+  #
+  ## Additional information can be found on the Automaticd documentation:
+  ## - GitHub Repository: https://pages.github.tools.sap/automaticd/automaticd/docs/github/api-reference/
+  ## - Gomplate Scaffold: https://pages.github.tools.sap/automaticd/automaticd/docs/scaffold/api-reference/#automaticd.sap/v1.Gomplate
+  ## - GitHub Commit: https://pages.github.tools.sap/automaticd/automaticd/docs/git-commit/api-reference/
+  ## - DXP Resources: https://pages.github.tools.sap/automaticd/automaticd/docs/dxp/api-reference/
+
+  # Create an empty DXP Component, such that it is quicker available
+  # and does not have to wait for the GitHub repository to be set up
+  - id: trigger-dxp-component-creation
+    endpoint:
+      # Automaticd production endpoint.
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: post
+      # Authorize to Automaticd via the Template Service.
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: DxpComponent
+      metadata:
+        # Uses an anchored reference to &AUTOMATICD_CR_NAME_DEFAULT (yaml feature)
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+        annotations:
+          # Specify that the resource should be pruned/deleted after 10 days.
+          # This avoids a pollution of Automaticd with unnecessary resources while it still allows for debugging in case something went unexpectedly wrong.
+          # See the Automaticd Pruning Wiki page for further information: https://github.tools.sap/automaticd/automaticd/wiki/Resource-Pruning-with-CronJobs
+          sap.automaticd.prune-policy: "10"
+      spec:
+        # Reuse the secret created via "call-token-provider".
+        secret:
+          name: *AUTOMATICD_CR_NAME_DEFAULT
+          ref: dxp
+          mapping:
+            dxp: kubeconfig
+        component:
+          displayName: "{{ $$.parameters[name = 'display-name'].value }}"
+        # The `runMapping` property establishes an association between a particular Template Run
+        # and a DXP Component via Template Bridge Service (https://templatebridge.live.dxp.k8s.ondemand.com/playground).
+        #
+        # This association is useful, whenever your Template acts in the context of a DXP Component,
+        # e.g. if it creates or modifies a Component.
+        # This allows Members of your DXP Project to access the Template Run status after the Component has been
+        # initially created.
+        runMapping:
+          projectId: "{{ $$.parameters[name = 'dxp-project-id'].value }}"
+          runId: "{{ $$.parameters[name = 'template-run-id'].value }}"
+          runToken: "{{ $$.parameters[name = 'template-run-token'].value }}"
+          templateId: "{{ $$.parameters[name = 'template-id'].value }}"
+    # With dependencies it is possible to reference the automation call "id"s, on which this call depends.
+    # This allows to wait for a call to be successful before the another call is issued.
+    #
+    # Automation calls that do not specify a dependency or for which all dependencies finished with success,
+    # will run in parallel to increase the speed of the Template execution.
+    dependencies:
+      # The token is needed as a secret and must be present in order for the Automaticd operator to perform its work.
+      - call-token-provider
+    responseHandlers:
+      # If 201 is returned, this is interpret as "success".
+      #
+      # The type "kubernetes" is a bit special, as it allows to use an array of payloads instead of only a single payload.
+      # It also allows to specify multiple resources in a single string. In both cases, each payload (array) element is
+      # interpret as a separate resource.
+      # As a result, a call will be executed for each resource specified in the "payload" array.
+      # Hence, if multiple resources are specified, the response object will be an array of responses.
+      # To check if all resources were created successfully, the responses can be combined via the JSONata $distinct function.
+      # Then it can be checked, if there were only 201 returned for all calls, like so:
+      # $distinct($$.automation[id = 'trigger-component-creation'].response.statusCode) = [201]
+      #
+      # Here, we only create one resource, so this complex expression is not required.
+      - when: $$.automation[id = 'trigger-dxp-component-creation'].response.statusCode = 201
+        status: "success"
+      - status: error
+        message: "Unable to trigger the DXP Component creation via Automaticd for Template Run {{ $$.parameters[name = 'template-run-id'].value }}."
+
+  # Specify a GitHub repository.
+  # This will either create a repository, if it does not exist yet),
+  # modify the repository, if it exists already and differs, or
+  # just play the role of a referencable object for the GithubCommit resource,
+  # such that it knows where to apply the commit to.
+  - id: trigger-github-repository-creation
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: post
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: GithubRepository
+      metadata:
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+        annotations:
+          sap.automaticd.prune-policy: "10"
+      spec:
+        endpoint: "{{ $$.parameters[name = 'github-endpoint'].value }}"
+        organization: "{{ $$.parameters[name = 'git-organization'].value }}"
+        repository: "{{ $$.parameters[name = 'repository-name'].value }}"
+        topics:
+          - my-exemplary-topic
+        deletionPolicy: Retain
+        owners: ["{{ $$.parameters[name = 'dxp-user-id'].value }}"]
+        # Reuse the secret created via "call-token-provider".
+        githubSecret:
+          name: *AUTOMATICD_CR_NAME_DEFAULT
+          ref: github
+          mapping:
+            access_token: access_token
+    dependencies:
+      - call-token-provider
+    responseHandlers:
+      - when: $$.automation[id = 'trigger-github-repository-creation'].response.statusCode = 201
+        status: "success"
+      - status: error
+        message: "Unable to trigger the GitHub repository creation via Automaticd for Template Run {{ $$.parameters[name = 'template-run-id'].value }}."
+
+  # Define the scaffolding files and the placeholder parameter values that should be
+  # replaced during the scaffolding.
+  - id: trigger-scaffold-generation
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: post
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v2
+      kind: Gomplate
+      metadata:
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+        annotations:
+          sap.automaticd.prune-policy: "10"
+      spec:
+        templates:
+          - name: scaffold
+            input:
+              authentication:
+                type: bearer
+              # This url should be changed to the repository that you copied the Skeleton Template to.
+              # Otherwise, changes to the content of your "scaffold/" directory will not be reflected in
+              # the created project scaffold.
+              # Pattern: https://github.tools.sap/api/v3/repos/{your-organization}/{template-copy-repo-name}/zipball
+              # E.g.: https://github.tools.sap/api/v3/repos/dxp/skeleton-template/zipball
+              url: https://github.tools.sap/api/v3/repos/henrikbtest/my-template/zipball
+              templatePath: scaffold
+        configuration:
+          dataSources:
+            - name: config
+              type: content
+              content: |
+                organization: "{{ $$.parameters[name = 'git-organization'].value }}"
+                repository: "{{ $$.parameters[name = 'repository-name'].value }}"
+                dryrun: false
+                # Parameters that should be collected from the Template user.
+                # Static values can be used, if a parameter shouldn't be collected from the user.
+                params:
+                  componentDisplayName: "{{ $$.parameters[name = 'display-name'].value }}"
+            - name: template-placeholder
+              type: file
+              templateRef: template
+              path: placeholder.yaml
+    responseHandlers:
+      - when: $$.automation[id = 'trigger-scaffold-generation'].response.statusCode = 201
+        status: "success"
+      - status: error
+        message: "Unable to trigger the Scaffold generation via Automaticd for Template Run {{ $$.parameters[name = 'template-run-id'].value }}."
+
+  # The git commit that should be applied to the GitHub repository.
+  - id: trigger-scaffold-commit-to-github-repository
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: post
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: GithubCommit
+      metadata:
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+        annotations:
+          sap.automaticd.prune-policy: "10"
+      spec:
+        asPullRequest: true
+        # The reference to the GitHub repository that is described above.
+        repositoryRef: *AUTOMATICD_CR_NAME_DEFAULT
+        branch: main
+        commitMessage: "feat: initialize repository with Skeleton Template"
+        secretRef:
+          name: *AUTOMATICD_CR_NAME_DEFAULT
+          ref: "github"
+          mapping:
+            access_token: access_token
+        # Uses the scaffold as the source (i.e. files) of the commit.
+        sources:
+          - type: Scaffold
+            kind: Gomplate
+            ref: *AUTOMATICD_CR_NAME_DEFAULT
+    dependencies:
+      - call-token-provider
+      # The Github repository must exist, before a commit can be made to it.
+      - watch-github-repository-creation
+      # The scaffold must be generated before it can be used, because otherwise there would be no content to commit.
+      - watch-scaffold-generation
+    responseHandlers:
+      - when: $$.automation[id = 'trigger-scaffold-commit-to-github-repository'].response.statusCode = 201
+        status: "success"
+      - status: error
+        message: "Unable to trigger the Commit of the scaffolded content to the GitHub repository via Automaticd for Template Run {{ $$.parameters[name = 'template-run-id'].value }}."
+
+  # Link the DXP Component with the created metadata.yaml once the file is available in the
+  # GitHub repository.
+  - id: trigger-dxp-component-registration
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: post
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: DxpComponent
+      metadata:
+        name: &AUTOMATICD_CR_NAME_COMPONENT_REGISTRY "{{ $$.general.name }}-{{ $$.parameters[name = 'template-run-id'].value }}-registry"
+        annotations:
+          sap.automaticd.prune-policy: "10"
+      spec:
+        projectId: "{{ $$.parameters[name = 'dxp-project-id'].value }}"
+        secret:
+          name: *AUTOMATICD_CR_NAME_DEFAULT
+          ref: dxp
+          mapping:
+            dxp: kubeconfig
+        component:
+          componentName: "{{ $$.automation[id = 'watch-dxp-component-creation'].response.body.status.componentName }}"
+          metadataURL: "{{ $$.parameters[name = 'github-endpoint'].value }}/{{ $$.parameters[name = 'git-organization'].value }}/{{ $$.parameters[name = 'repository-name'].value }}/blob/main/metadata.yml"
+    dependencies:
+      - call-token-provider
+      # The metadata file must be available in the Github repository in order to register it with the DXP Component.
+      - watch-scaffold-commit-to-github-repository
+      - watch-dxp-component-creation
+    responseHandlers:
+      - when: $$.automation[id = 'trigger-dxp-component-registration'].response.statusCode = 201
+        status: "success"
+      - status: error
+        message: "Unable to trigger the DXP Component registration via Automaticd for Template Run {{ $$.parameters[name = 'template-run-id'].value }}."
+
+  # After the initial triggers, which start the orchestration in Automaticd, the results of this orchestration
+  # should be watched.
+  # This allows to check, if Automaticd is processing the provided information correctly and provide
+  # feedback to the end-user of the Template Run.
+  #
+  # Technically, the Template Service sends a Kubernetes "watch" request to the Automaticd endpoint
+  # and watches for updates to the Resource specified in the payload.
+  - id: watch-github-repository-creation
+    # The label will be displayed as the name of the automation call in the Template Run progress monitor.
+    # This allows to provide human friendly names for the automation calls.
+    # Additionally, if a label is specified, only the Automation calls with a label will be displayed
+    # to end users that monitor the Template Run execution. This allows to show only relevant information
+    # to end users.
+    # All other calls will only be displayed in case of an error in the overall Template execution
+    # to enable debugging in an error case.
+    label: GitHub Repository
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: watch
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: GithubRepository
+      metadata:
+        name: "{{ $$.general.name }}-{{ $$.parameters[name = 'template-run-id'].value }}"
+    monitor:
+      # For method "watch", the timeout is reset for each received update.
+      timeout: 10000
+    dependencies:
+      # It is only useful to watch the status of the resource in Automaticd once it was successfully created.
+      - trigger-github-repository-creation
+    responseHandlers:
+      # Here, we only have one resource in the payload, only one response will be available at a time.
+      # Therefore, unlike with "trigger-automaticd" there is no need to use $distinct when querying the response values.
+      - when: >-
+          $$.automation[id = 'watch-github-repository-creation'].response.statusCode = 200 and
+          $$.automation[id = 'watch-github-repository-creation'].response.body.status.setupStatus = 'Created'
+        status: success
+        message: >-
+          Github repository ready and initialized: 
+          {{ $$.automation[id='watch-github-repository-creation'].response.body.status.repositoryUrl }}
+      - when: >-
+          $$.automation[id = 'watch-github-repository-creation'].response.statusCode = 200 and
+          $$.automation[id = 'watch-github-repository-creation'].response.body.status.setupStatus = 'FailingCreation'
+        status: error
+        # The concatenation with a colon string ':' also ensures that the error message is processed fine even if the corresponding 'errorCode' or 'errorMessage' is not found in the payload.
+        # The opening bracket '(' and closing bracket ')' enables using multiple lines for single JSONata expression.
+        message: >-
+          {{ ($$.automation[id = 'watch-github-repository-creation'].response.body.status.errorCode & ' : ' &
+          $$.automation[id = 'watch-github-repository-creation'].response.body.status.errorMessage) }}
+        # Otherwise, the Automaticd Operator is still reconciling the Resource.
+      - status: in-progress
+
+  # Watch the Scaffold creation
+  - id: watch-scaffold-generation
+    label: Scaffolding
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: watch
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v2
+      kind: Gomplate
+      metadata:
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+    dependencies:
+      - trigger-scaffold-generation
+    responseHandlers:
+      - when: >-
+          $$.automation[id = 'watch-scaffold-generation'].response.statusCode = 200 and
+          $$.automation[id = 'watch-scaffold-generation'].response.body.status.setupStatus = 'Created' and
+          $$.automation[id = 'watch-scaffold-generation'].response.body.status.conditions[0].reason = 'CompletedSuccessfully'
+        status: success
+      - when: >-
+          $$.automation[id = 'watch-scaffold-generation'].response.statusCode = 200 and
+          $$.automation[id = 'watch-scaffold-generation'].response.body.status.setupStatus = 'FailingCreation'
+        status: error
+        # The concatenation with an empty string (& "") is there to make sure the message is processed OK even if the corresponding errorCode or errorMessage is not in the payload.
+        message: >-
+          {{ $$.automation[id = 'watch-scaffold-generation'].response.body.status.errorCode & "" }} :
+          {{ $$.automation[id = 'watch-scaffold-generation'].response.body.status.errorMessage & "" }}
+      - status: in-progress
+
+  # Watch the Commit of the Scaffold to GitHub.
+  - id: watch-scaffold-commit-to-github-repository
+    label: GitHub Content Commit (Scaffold)
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: watch
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: GithubCommit
+      metadata:
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+    dependencies:
+      - trigger-scaffold-commit-to-github-repository
+    responseHandlers:
+      - when: >-
+          $$.automation[id = 'watch-scaffold-commit-to-github-repository'].response.statusCode = 200 and
+          $$.automation[id = 'watch-scaffold-commit-to-github-repository'].response.body.status.setupStatus = 'Created'
+        status: success
+        message: "Github commit ready and pushed to repository."
+      - when: >-
+          $$.automation[id = 'watch-scaffold-commit-to-github-repository'].response.statusCode = 200 and
+          $$.automation[id = 'watch-scaffold-commit-to-github-repository'].response.body.status.setupStatus = 'FailingCreation'
+        status: error
+        message: >-
+          {{ ($$.automation[id = 'watch-scaffold-commit-to-github-repository'].response.body.status.errorCode & ' : ' &
+          $$.automation[id = 'watch-scaffold-commit-to-github-repository'].response.body.status.errorMessage) }}
+      - status: in-progress
+
+  # Watch the DXP Component creation.
+  - id: watch-dxp-component-creation
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: watch
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: DxpComponent
+      metadata:
+        name: *AUTOMATICD_CR_NAME_DEFAULT
+    dependencies:
+      - trigger-dxp-component-creation
+    monitor:
+      timeout: 15
+    responseHandlers:
+      - when: >-
+          $$.automation[id = 'watch-dxp-component-creation'].response.statusCode = 200 and
+          $$.automation[id = 'watch-dxp-component-creation'].response.body.status.setupStatus = 'Created'
+        status: success
+      - when: >-
+          $$.automation[id = 'watch-dxp-component-creation'].response.statusCode = 200 and
+          $$.automation[id = 'watch-dxp-component-creation'].response.body.status.setupStatus = 'FailingCreation'
+        status: error
+        message: >-
+          {{ ($$.automation[id = 'watch-dxp-component-creation'].response.body.status.errorCode & ' : ' & 
+          $$.automation[id = 'watch-dxp-component-creation'].response.body.status.errorMessage) }}
+      - status: in-progress
+
+  # Watch the DXP Component registration.
+  - id: watch-dxp-component-registration
+    label: Component Setup
+    endpoint:
+      url: "{{ $$.parameters[name = 'automaticd-api-url'].value }}"
+      type: kubernetes
+      method: watch
+      authorization: automaticd_builtin
+    payload:
+      apiVersion: automaticd.sap/v1
+      kind: DxpComponent
+      metadata:
+        name: *AUTOMATICD_CR_NAME_COMPONENT_REGISTRY
+    dependencies:
+      - trigger-dxp-component-registration
+    responseHandlers:
+      - when: >-
+          $$.automation[id = 'watch-dxp-component-registration'].response.statusCode = 200 and
+          $$.automation[id = 'watch-dxp-component-registration'].response.body.status.setupStatus = 'Created'
+        status: success
+      - when: >-
+          $$.automation[id = 'watch-dxp-component-registration'].response.statusCode = 200 and
+          $$.automation[id = 'watch-dxp-component-registration'].response.body.status.setupStatus = 'FailingCreation'
+        status: error
+        message: >-
+          {{ ($$.automation[id = 'watch-dxp-component-registration'].response.body.status.errorCode & ' : ' & 
+          $$.automation[id = 'watch-dxp-component-registration'].response.body.status.errorMessage) }}
+      - status: in-progress

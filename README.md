@@ -1,1 +1,1 @@
-# my-template
+Produced by very cool template: my-template

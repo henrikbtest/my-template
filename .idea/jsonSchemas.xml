@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+    <component name="JsonSchemaMappingsProjectConfiguration">
+        <state>
+            <map>
+                <entry key="2.1.0-schema.template-definition">
+                    <value>
+                        <SchemaInfo>
+                            <option name="generatedName" value="Template Definition Schema 2.1.0" />
+                            <option name="name" value="2.1.0-schema.template-definition" />
+                            <option name="relativePathToSchema" value="https://int.repositories.cloud.sap/artifactory/template-utils/schemas/template-definition/2.1.0/spec.template-definition.json" />
+                            <option name="schemaVersion" value="JSON Schema version 7" />
+                            <option name="patterns">
+                                <list>
+                                    <Item>
+                                        <option name="pattern" value="true" />
+                                        <option name="path" value="*.template.yaml" />
+                                        <option name="mappingKind" value="Pattern" />
+                                    </Item>
+                                    <Item>
+                                        <option name="pattern" value="true" />
+                                        <option name="path" value="*.template-definition.yaml" />
+                                        <option name="mappingKind" value="Pattern" />
+                                    </Item>
+                                </list>
+                            </option>
+                        </SchemaInfo>
+                    </value>
+                </entry>
+            </map>
+        </state>
+    </component>
+</project>

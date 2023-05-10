@@ -1,0 +1,8 @@
+{
+  "yaml.schemas": {
+    "https://int.repositories.cloud.sap/artifactory/template-utils/schemas/template-definition/2.1.0/spec.template-definition.json": [
+      "{*.template.yaml}",
+      "{*.template-definition.yaml}"
+    ]
+  }
+}
