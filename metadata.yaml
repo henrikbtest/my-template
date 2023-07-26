@@ -4,7 +4,7 @@
 
 kind: Component
 metadata:
-  displayName: Error: Requesting template run failed
+  displayName: "Error: Requesting template run failed"
   description: # Component description
   labels:
     language: # java|typescript|golang
